@@ -1,15 +1,10 @@
-.env
-.maf_cache/
-.env.*
-!.env.example
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.streamlit/secrets.toml
-data/*.db
+.maf_cache/
+.env
+.env.*
+!.env.example
 build/
 dist/
-*.spec
 Taskloom Desktop/
 Taskloom Installer/
-installer_payload/
