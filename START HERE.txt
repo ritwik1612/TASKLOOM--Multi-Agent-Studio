@@ -1,0 +1,8 @@
+TASKLOOM DESKTOP INSTALLER
+
+1. Double-click Taskloom Setup.exe.
+2. Approve Windows' administrator prompt. This is needed only because the default install location is Program Files.
+3. Keep the default location or click Browse to choose another folder.
+4. Open Taskloom after installation.
+
+On first use, select Connect Gemini to create and securely save your personal Gemini API key(s).

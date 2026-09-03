@@ -1,0 +1,2 @@
+# Keep the distributable installer out of ordinary Git history.
+*.exe filter=lfs diff=lfs merge=lfs -text
