@@ -6,6 +6,8 @@ Taskloom is a native Windows application that makes AI-assisted language work mo
 
 > **Built for demonstrations, learning, and thoughtful AI-assisted content work.**
 
+> **Download the app from [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest). Do not use GitHub’s “Code → Download ZIP”; that archive is for source code, not installation.**
+
 ---
 
 ## What Taskloom does
@@ -76,10 +78,11 @@ The coordinator is deterministic Python orchestration. The role names represent 
 
 ## Install Taskloom on Windows
 
-1. Double-click **`Taskloom Setup.exe`** in this folder.
-2. Approve the Windows prompt. The default location is **`C:\Program Files\Taskloom`**.
-3. Keep the default or choose **Browse** to install somewhere else.
-4. Leave **Open Taskloom when installation finishes** selected to begin immediately.
+1. Open [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest) and download **`Taskloom-Windows-v1.0.0.zip`**.
+2. Extract the ZIP, then double-click **`Taskloom Setup.exe`**.
+3. Approve the Windows prompt. The default location is **`C:\Program Files\Taskloom`**.
+4. Keep the default or choose **Browse** to install somewhere else.
+5. Leave **Open Taskloom when installation finishes** selected to begin immediately.
 
 No command line, Python installation, or development setup is needed for normal use.
 
