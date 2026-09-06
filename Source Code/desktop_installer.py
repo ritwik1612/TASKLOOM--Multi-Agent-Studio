@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import os
 import shutil
+import subprocess
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -38,6 +39,32 @@ def relaunch_elevated() -> None:
     result = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, args, None, 1)
     if result <= 32:
         raise OSError("Windows could not approve the installer.")
+
+
+def create_start_menu_shortcut(executable: Path, icon: Path) -> None:
+    """Create the entry Windows Search uses to find the installed app."""
+    start_menu = Path(os.environ.get("ProgramData", r"C:\\ProgramData")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / PRODUCT_NAME
+    start_menu.mkdir(parents=True, exist_ok=True)
+    shortcut = start_menu / f"{PRODUCT_NAME}.lnk"
+
+    def powershell_path(path: Path) -> str:
+        return str(path).replace("'", "''")
+
+    script = (
+        "$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut('"
+        f"{powershell_path(shortcut)}');"
+        f"$shortcut.TargetPath = '{powershell_path(executable)}';"
+        f"$shortcut.WorkingDirectory = '{powershell_path(executable.parent)}';"
+        f"$shortcut.IconLocation = '{powershell_path(icon)},0';"
+        "$shortcut.Description = 'Taskloom — Multi-Agent Studio';"
+        "$shortcut.Save()"
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 class Installer(tk.Tk):
@@ -121,7 +148,12 @@ class Installer(tk.Tk):
         row.pack(fill="x")
         ttk.Entry(row, textvariable=self.destination, style="Path.TEntry").pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Browse…", command=self.choose_folder, style="Secondary.TButton").pack(side="left", padx=(10, 0))
-        ttk.Label(content, text="Default: Program Files. You can select a different folder if you prefer.", style="Body.TLabel").pack(anchor="w", pady=(7, 18))
+        ttk.Label(
+            content,
+            text="Default: Program Files. You can select a different folder if you prefer. A Taskloom shortcut will be added to the Windows Start menu.",
+            style="Body.TLabel",
+            wraplength=680,
+        ).pack(anchor="w", pady=(7, 18))
 
         ttk.Checkbutton(content, text="Open Taskloom when installation finishes", variable=self.launch_after).pack(anchor="w", pady=(0, 16))
         ttk.Label(content, textvariable=self.status, style="Body.TLabel").pack(anchor="w")
@@ -152,16 +184,27 @@ class Installer(tk.Tk):
             readme.write_text(
                 "TASKLOOM DESKTOP\n\nOpen Taskloom.exe to start the app.\n\n"
                 "On first use, select Connect Gemini. Create a Google AI Studio API key, then paste a primary key and (optionally) a spare backup key. "
-                "Your keys are saved in Windows Credential Manager, not in this folder.\n",
+                "Your keys are saved in Windows Credential Manager, not in this folder.\n\n"
+                "Taskloom is also added to the Windows Start menu, so you can search for Taskloom after installation.\n",
                 encoding="utf-8",
             )
+            try:
+                create_start_menu_shortcut(destination / "Taskloom.exe", destination / "Taskloom Runtime" / "assets" / "taskloom.ico")
+            except (OSError, subprocess.SubprocessError):
+                # The program is already installed; a shortcut failure should
+                # not prevent a user from opening Taskloom from its folder.
+                pass
         except OSError as exc:
             messagebox.showerror("Installation could not finish", f"Taskloom could not be installed here.\n\n{exc}")
             self.status.set("Installation needs a different folder or administrator permission.")
             return
 
         self.status.set("Installed successfully.")
-        messagebox.showinfo("Taskloom installed", f"Taskloom is ready in:\n{destination}\n\nOpen Taskloom.exe whenever you want to work.")
+        messagebox.showinfo(
+            "Taskloom installed",
+            f"Taskloom is ready in:\n{destination}\n\n"
+            "You can now search for ‘Taskloom’ from the Windows Start menu, or open Taskloom.exe directly.",
+        )
         if self.launch_after:
             os.startfile(destination / "Taskloom.exe")
         self.destroy()

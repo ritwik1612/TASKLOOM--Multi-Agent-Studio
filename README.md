@@ -78,13 +78,15 @@ The coordinator is deterministic Python orchestration. The role names represent 
 
 ## Install Taskloom on Windows
 
-1. Open [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest) and download **`Taskloom-Windows-v1.0.0.zip`**.
+1. Open [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest) and download **`Taskloom-Windows-v1.0.1.zip`**.
 2. Extract the ZIP, then double-click **`Taskloom Setup.exe`**.
 3. Approve the Windows prompt. The default location is **`C:\Program Files\Taskloom`**.
 4. Keep the default or choose **Browse** to install somewhere else.
 5. Leave **Open Taskloom when installation finishes** selected to begin immediately.
 
 No command line, Python installation, or development setup is needed for normal use.
+
+After installation, search the Windows Start menu for **Taskloom**. The installer creates a Start-menu shortcut automatically.
 
 ---
 
