@@ -6,3 +6,5 @@ TASKLOOM DESKTOP INSTALLER
 4. Open Taskloom after installation.
 
 On first use, select Connect Gemini to create and securely save your personal Gemini API key(s).
+
+After approving content, choose Download content. Markdown, text, and PDF exports are saved directly to your Windows Downloads folder.

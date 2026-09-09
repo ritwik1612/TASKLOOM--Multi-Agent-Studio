@@ -67,6 +67,33 @@ def create_start_menu_shortcut(executable: Path, icon: Path) -> None:
     )
 
 
+def install_payload(destination: Path) -> None:
+    """Install or update the bundled application without launching it."""
+    payload = bundled_path("TaskloomPayload")
+    executable = payload / "Taskloom.exe"
+    if not executable.exists():
+        raise FileNotFoundError("Taskloom's installation files could not be found.")
+
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(executable, destination / "Taskloom.exe")
+    shutil.copytree(payload / "Taskloom Runtime", destination / "Taskloom Runtime", dirs_exist_ok=True)
+    (destination / "READ ME.txt").write_text(
+        "TASKLOOM DESKTOP\n\nOpen Taskloom.exe to start the app.\n\n"
+        "On first use, select Connect Gemini. Create a Google AI Studio API key, then paste a primary key and (optionally) a spare backup key. "
+        "Your keys are saved in Windows Credential Manager, not in this folder.\n\n"
+        "Approved Markdown, plain-text, and PDF exports are saved directly to your Windows Downloads folder.\n\n"
+        "Taskloom is also added to the Windows Start menu, so you can search for Taskloom after installation.\n",
+        encoding="utf-8",
+    )
+    try:
+        create_start_menu_shortcut(
+            destination / "Taskloom.exe",
+            destination / "Taskloom Runtime" / "assets" / "taskloom.ico",
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 class Installer(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -218,6 +245,12 @@ def main() -> None:
             relaunch_elevated()
         except OSError as exc:
             messagebox.showerror("Administrator approval required", str(exc))
+        return
+    if "--silent-update" in sys.argv:
+        try:
+            install_payload(DEFAULT_INSTALL_DIR)
+        except OSError as exc:
+            messagebox.showerror("Taskloom update failed", str(exc))
         return
     Installer().mainloop()
 

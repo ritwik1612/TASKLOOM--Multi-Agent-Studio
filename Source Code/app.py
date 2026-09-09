@@ -13,7 +13,7 @@ from artifacts import build_artifact_pdf
 from config import refresh_credentials, settings
 from credential_store import delete_api_key, save_api_key, secure_storage_available
 from orchestrator import Orchestrator
-from paths import resource_path
+from paths import resource_path, save_to_downloads
 from providers import GeminiFailoverProvider
 
 
@@ -196,9 +196,15 @@ def inject_theme() -> None:
         .maf-kicker,.maf-section-label,.maf-eyebrow,.maf-info-card dt,.maf-map-detail i,
         .maf-architecture-detail i,.maf-architecture-flow i,.maf-trace strong { color:#b9c7ff!important; }
         div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button {
-          width:auto!important;min-height:auto!important;overflow:visible!important;clip-path:none!important;
+          width:12rem!important;max-width:none!important;min-height:2.35rem!important;overflow:visible!important;clip-path:none!important;
           padding:.35rem 0!important;white-space:nowrap!important;
         }
+        .st-key-download_action [data-testid="stPopoverButton"] { background:#0c1933!important;border-color:rgba(203,213,255,.55)!important;color:#f5f1e8!important; }
+        .st-key-download_action [data-testid="stPopoverButton"] p { color:#f5f1e8!important; }
+        .st-key-download_action [data-testid="stPopoverButton"]:hover { background:#122348!important;border-color:#cbd5ff!important;color:#f5f1e8!important; }
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"] { background:#0c1933!important;border-color:rgba(203,213,255,.55)!important;color:#f5f1e8!important; }
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"] p { color:#f5f1e8!important; }
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"]:hover { background:#122348!important;border-color:#cbd5ff!important;color:#f5f1e8!important; }
         """.replace("__TASKLOOM_NIGHT_SKY__", night_sky_uri)
         if st.session_state.get("night_mode", False)
         else ""
@@ -659,9 +665,17 @@ def inject_theme() -> None:
         .maf-footer {{ font-family:'Courier Prime','Courier New',monospace!important;letter-spacing:.06em!important; }}
         .maf-back-anchor {{ display:none!important; }}
         div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] {{ width:max-content!important;max-width:none!important;overflow:visible!important; }}
-        div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton {{ width:max-content!important;overflow:visible!important; }}
-        div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button {{ width:max-content!important;min-height:auto!important;padding:.35rem .12rem!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:#1838df!important;font-family:'Courier Prime','Courier New',monospace!important;font-size:.78rem!important;font-weight:700!important;letter-spacing:.02em!important;overflow:visible!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton {{ width:12rem!important;max-width:none!important;overflow:visible!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button {{ width:12rem!important;max-width:none!important;min-height:2.35rem!important;padding:.35rem .35rem!important;background:transparent!important;border:0!important;border-radius:0!important;clip-path:none!important;box-shadow:none!important;color:#1838df!important;font-family:'Courier Prime','Courier New',monospace!important;font-size:.78rem!important;font-weight:700!important;letter-spacing:.02em!important;overflow:visible!important;white-space:nowrap!important;justify-content:flex-start!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button p {{ width:auto!important;max-width:none!important;overflow:visible!important;white-space:nowrap!important;text-overflow:clip!important; }}
         div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button:hover {{ background:transparent!important;color:#102aa9!important;transform:translateX(-2px); }}
+        .st-key-download_action [data-testid="stPopoverButton"] {{ background:transparent!important;border:1px solid #1838df!important;color:#1838df!important;box-shadow:none!important; }}
+        .st-key-download_action [data-testid="stPopoverButton"] p {{ color:#1838df!important; }}
+        .st-key-download_action [data-testid="stPopoverButton"]:hover {{ background:rgba(24,56,223,.07)!important;color:#102aa9!important;box-shadow:0 7px 16px rgba(24,56,223,.12)!important; }}
+        .maf-download-anchor {{ display:none!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"] {{ background:transparent!important;border:1px solid #1838df!important;color:#1838df!important;box-shadow:none!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"] p {{ color:#1838df!important; }}
+        div[data-testid="stElementContainer"]:has(.maf-download-anchor) + div[data-testid="stElementContainer"] [data-testid="stPopoverButton"]:hover {{ background:rgba(24,56,223,.07)!important;color:#102aa9!important;box-shadow:0 7px 16px rgba(24,56,223,.12)!important; }}
         .maf-brand {{ position:relative; }}
         .maf-home-logo {{ display:none!important; }}
         .maf-logo-context {{ position:relative; }}
@@ -799,7 +813,7 @@ def local_usage_snapshot() -> tuple[int, int, int]:
     return used, budget, max(budget - used, 0)
 
 
-def render_panel_back(key: str, destination: str = "home", label: str = "← Back to home") -> None:
+def render_panel_back(key: str, destination: str = "home", label: str = "‹ Back to home") -> None:
     st.markdown('<div class="maf-back-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     if st.button(label, key=key):
         st.session_state.page = destination
@@ -1540,22 +1554,34 @@ if result:
         else:
             st.success("Content approved")
             download_col, new_col = st.columns(2)
+            download_notice = None
             with download_col:
+                st.markdown('<div class="maf-download-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
                 with st.popover("Download content", use_container_width=True):
                     st.markdown('<div class="maf-menu-kicker">CHOOSE A FORMAT</div>', unsafe_allow_html=True)
-                    st.download_button(
-                        "Markdown (.md)", output, "maf-approved-output.md", "text/markdown",
-                        key="download_content_markdown", use_container_width=True,
-                    )
+                    if st.button("Markdown (.md)", key="download_content_markdown", use_container_width=True):
+                        try:
+                            saved_path = save_to_downloads(output, "Taskloom-approved-output.md")
+                            download_notice = f"Saved to Windows Downloads: {saved_path.name}"
+                        except (OSError, ValueError) as exc:
+                            st.error(f"Taskloom could not save the Markdown file: {exc}")
                     plain_text = output.replace("**", "").replace("### ", "")
-                    st.download_button(
-                        "Plain text (.txt)", plain_text, "maf-approved-output.txt", "text/plain",
-                        key="download_content_text", use_container_width=True,
-                    )
-                    st.download_button(
-                        "PDF (.pdf)", build_artifact_pdf(output), "maf-approved-output.pdf", "application/pdf",
-                        key="download_content_pdf", use_container_width=True,
-                    )
+                    if st.button("Plain text (.txt)", key="download_content_text", use_container_width=True):
+                        try:
+                            saved_path = save_to_downloads(plain_text, "Taskloom-approved-output.txt")
+                            download_notice = f"Saved to Windows Downloads: {saved_path.name}"
+                        except (OSError, ValueError) as exc:
+                            st.error(f"Taskloom could not save the text file: {exc}")
+                    if st.button("PDF (.pdf)", key="download_content_pdf", use_container_width=True):
+                        try:
+                            saved_path = save_to_downloads(
+                                build_artifact_pdf(output), "Taskloom-approved-output.pdf"
+                            )
+                            download_notice = f"Saved to Windows Downloads: {saved_path.name}"
+                        except (OSError, ValueError) as exc:
+                            st.error(f"Taskloom could not save the PDF file: {exc}")
+            if download_notice:
+                st.success(download_notice)
             if new_col.button("Start another task", use_container_width=True):
                 reset_run()
                 st.session_state.page = "chat"

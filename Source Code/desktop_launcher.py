@@ -55,6 +55,7 @@ def launch_desktop_window() -> int:
     """Start a local server in the background and display it in a native window."""
     import webview
 
+    webview.settings["ALLOW_DOWNLOADS"] = True
     port = find_available_port()
     url = f"http://127.0.0.1:{port}"
     command = [sys.executable]
