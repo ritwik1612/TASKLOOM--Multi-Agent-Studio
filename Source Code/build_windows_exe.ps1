@@ -19,6 +19,7 @@ $uiMode = if ($Console) { "--console" } else { "--windowed" }
     --collect-all keyring `
     --collect-all webview `
     --add-data "app.py;." `
+    --add-data "comparison.py;." `
     --add-data "config.py;." `
     --add-data "credential_store.py;." `
     --add-data "paths.py;." `

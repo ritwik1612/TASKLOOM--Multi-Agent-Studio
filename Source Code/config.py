@@ -19,7 +19,7 @@ class Settings:
     max_tasks: int = 4
     max_parallel_workers: int = 3
     max_revisions: int = 1
-    gemini_daily_request_limit: int = int(os.getenv("GEMINI_DAILY_REQUEST_LIMIT", "20"))
+    gemini_daily_request_limit: int = int(os.getenv("GEMINI_DAILY_REQUEST_LIMIT", "30"))
 
 
 settings = Settings()

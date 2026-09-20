@@ -37,6 +37,8 @@ Gemini is the language model that can generate or validate material. Taskloom is
 
 Taskloom does **not** claim access to Gemini’s private reasoning. Its visible traces describe Taskloom’s own Python-managed workflow and validated structured output.
 
+The optional **Gemini comparison** tab sends the same request through a direct, one-response Gemini baseline, then presents both outputs side by side with deterministic local measurements. It is deliberately opt-in because it may use one additional API request. Taskloom also preserves unfinished prompts and revision notes when the user switches between day and night mode.
+
 ---
 
 ## From request to result

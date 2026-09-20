@@ -10,6 +10,7 @@ from pathlib import Path
 import streamlit as st
 
 from artifacts import build_artifact_pdf
+from comparison import build_direct_gemini_prompt, output_statistics
 from config import refresh_credentials, settings
 from credential_store import delete_api_key, save_api_key, secure_storage_available
 from orchestrator import Orchestrator
@@ -47,6 +48,19 @@ def preserve_theme_query() -> None:
     """Keep the selected visual mode when a navigation action clears panel routes."""
     st.query_params.clear()
     st.query_params["theme"] = "night" if st.session_state.get("night_mode", False) else "light"
+
+
+def remember_draft(widget_key: str, draft_key: str) -> None:
+    """Mirror a live widget value so visual reruns cannot discard unfinished work."""
+    st.session_state[draft_key] = st.session_state.get(widget_key, "")
+
+
+def toggle_theme() -> None:
+    """Preserve active writing before applying the alternate visual theme."""
+    remember_draft("task_input", "task_draft")
+    remember_draft("revision_feedback", "revision_draft")
+    st.session_state.night_mode = not st.session_state.get("night_mode", False)
+    st.query_params["theme"] = "night" if st.session_state.night_mode else "light"
 
 
 olivera_font_uri = local_font_uri("Olivera_Demo.ttf", "font/ttf")
@@ -117,6 +131,14 @@ def inject_theme() -> None:
         .maf-hero p,.maf-chat-intro p,.maf-panel-hero p,.maf-decision-head p,.maf-revision-head p,
         .maf-info-card .maf-note,.maf-map-detail p,.maf-architecture-detail p,.maf-architecture-flow span,
         .maf-task-objective,.maf-trace small,.maf-footer,[data-testid="stCaptionContainer"] { color:rgba(245,241,232,.7)!important; }
+        .maf-compare-intro,.st-key-comparison_taskloom,.st-key-comparison_gemini {
+          background:rgba(12,25,51,.88)!important;border-color:rgba(203,213,255,.28)!important;
+        }
+        .maf-compare-intro b,.st-key-comparison_taskloom,.st-key-comparison_gemini,
+        .st-key-comparison_taskloom p,.st-key-comparison_gemini p,.maf-compare-table { color:#f5f1e8!important; }
+        .maf-compare-intro span { color:rgba(245,241,232,.7)!important; }
+        .maf-compare-table th { color:#a7b8ff!important; }
+        .maf-compare-table th,.maf-compare-table td { border-color:rgba(203,213,255,.22)!important; }
         .maf-network path,.maf-chat-network path { stroke:#91a8ff!important; }
         .maf-network circle,.maf-chat-network circle { fill:#cbd5ff!important; }
         .maf-live { background:#0c1933!important;border-color:rgba(203,213,255,.55)!important;color:#f5f1e8!important; }
@@ -730,6 +752,14 @@ def inject_theme() -> None:
         .maf-trace {{ border-left:2px solid #1838df!important;padding:0 0 1rem 1rem!important; }}
         .maf-trace strong {{ color:#1838df!important;font-family:'Courier Prime','Courier New',monospace!important; }}
         .maf-trace small {{ color:#626173!important;font-family:'Courier Prime','Courier New',monospace!important; }}
+        .maf-compare-intro {{ margin:1.1rem 0 1rem;padding:1.1rem 1.25rem;border-left:3px solid #1838df;background:rgba(24,56,223,.06); }}
+        .maf-compare-intro b {{ display:block;color:var(--maf-text);font-family:'Taskloom Olivera',Georgia,serif;font-size:1.55rem;font-weight:400;letter-spacing:-.02em; }}
+        .maf-compare-intro span {{ display:block;margin-top:.35rem;color:var(--maf-muted);font-family:'Courier Prime','Courier New',monospace;font-size:.74rem;line-height:1.55; }}
+        .st-key-comparison_taskloom,.st-key-comparison_gemini {{ min-height:280px;padding:1.15rem 1.25rem;border:1px solid rgba(24,56,223,.28);background:rgba(255,255,255,.66);clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%); }}
+        .st-key-comparison_taskloom h4,.st-key-comparison_gemini h4 {{ margin-top:0!important;color:#1838df!important;font-family:'Courier Prime','Courier New',monospace!important;font-size:.7rem!important;font-weight:700!important;letter-spacing:.11em!important;text-transform:uppercase!important; }}
+        .maf-compare-table {{ width:100%;margin:1.1rem 0;border-collapse:collapse;color:var(--maf-text);font-family:'Courier Prime','Courier New',monospace;font-size:.72rem; }}
+        .maf-compare-table th,.maf-compare-table td {{ padding:.75rem .8rem;border-bottom:1px solid rgba(24,56,223,.22);text-align:left;vertical-align:top; }}
+        .maf-compare-table th {{ color:#1838df;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase; }}
         @media(max-width:700px) {{ .maf-task-row {{ grid-template-columns:66px 1fr!important;gap:.8rem!important; }} .maf-task-objective {{ grid-column:2!important; }} }}
         .maf-panel-hero {{ max-width:1030px;margin:2.8rem auto 1.6rem;padding:3.5rem 0 2.5rem;border-bottom:1px solid rgba(24,56,223,.28); }}
         .maf-panel-hero h1 {{ color:var(--maf-text);font-family:'Taskloom Olivera',Georgia,serif;font-size:clamp(3.4rem,6vw,6.4rem);font-weight:400;line-height:.83;letter-spacing:-.06em;margin:.85rem 0 1.2rem; }}
@@ -803,6 +833,13 @@ def run_agents(text: str):
     return result, provider.last_call_cached, provider.successful_requests_today()
 
 
+def run_direct_gemini(text: str):
+    """Generate a one-shot Gemini baseline for an explicit user comparison."""
+    provider = get_provider()
+    output = asyncio.run(provider.generate_text(build_direct_gemini_prompt(text)))
+    return output, provider.last_call_cached, provider.successful_requests_today()
+
+
 def local_usage_snapshot() -> tuple[int, int, int]:
     """Return Taskloom's own successful-call count, never pretending to know global key usage."""
     if not settings.gemini_api_key:
@@ -858,10 +895,7 @@ def render_theme_control() -> None:
     """Switch between the editorial daylight surface and the night-sky surface."""
     st.markdown('<div class="maf-theme-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     label = "☀ DAY MODE" if st.session_state.get("night_mode", False) else "☾ NIGHT MODE"
-    if st.button(label, key="taskloom_theme_toggle"):
-        st.session_state.night_mode = not st.session_state.get("night_mode", False)
-        st.query_params["theme"] = "night" if st.session_state.night_mode else "light"
-        st.rerun()
+    st.button(label, key="taskloom_theme_toggle", on_click=toggle_theme)
 
 
 def inject_navigation_asset_styles(ribbon_src: str, connected: bool) -> None:
@@ -1185,6 +1219,7 @@ def reset_run() -> None:
     for key in (
         "result", "accepted", "final_output", "revision_count", "original_request",
         "response_source", "local_requests_today", "revision_mode", "revision_feedback",
+        "revision_draft", "direct_gemini_output", "direct_gemini_source",
     ):
         st.session_state.pop(key, None)
 
@@ -1401,11 +1436,19 @@ else:
     st.markdown('<div class="maf-section-label">New conversation</div>', unsafe_allow_html=True)
 
     if "task_input" not in st.session_state:
-        st.session_state.task_input = ""
+        st.session_state.task_input = st.session_state.get("task_draft", "")
+    if "task_draft" not in st.session_state:
+        st.session_state.task_draft = st.session_state.task_input
 
     _, composer, _ = st.columns([1, 10, 1])
     with composer:
-        prompt = st.text_area("Task", key="task_input", height=124)
+        prompt = st.text_area(
+            "Task",
+            key="task_input",
+            height=124,
+            on_change=remember_draft,
+            args=("task_input", "task_draft"),
+        )
         action_col, clear_col = st.columns([5, 1])
         with action_col:
             run_clicked = st.button(
@@ -1415,6 +1458,7 @@ else:
             if st.button("Clear", use_container_width=True):
                 reset_run()
                 st.session_state.task_input = ""
+                st.session_state.task_draft = ""
                 st.rerun()
         st.caption("↳ One request creates the complete preview. Exact repeats are served locally without using Gemini quota.")
 
@@ -1477,11 +1521,12 @@ if result:
     badges = "".join(f'<span class="maf-role">{escape(role)}</span>' for role in roles)
     st.markdown(f'<div class="maf-role-row">{badges}</div>', unsafe_allow_html=True)
 
-    preview_tab, plan_tab, language_tab, review_tab = st.tabs(
-        ["Content", "Agent map", "Language trace", "Quality review"]
+    current_output = st.session_state.get("final_output", result.final_answer) if accepted else result.final_answer
+    preview_tab, plan_tab, language_tab, review_tab, comparison_tab = st.tabs(
+        ["Content", "Agent map", "Language trace", "Quality review", "Gemini comparison"]
     )
     with preview_tab:
-        output = st.session_state.get("final_output", result.final_answer) if accepted else result.final_answer
+        output = current_output
         with st.container(key="output_content"):
             st.markdown(output)
 
@@ -1526,6 +1571,8 @@ if result:
                     key="revision_feedback",
                     height=118,
                     placeholder="For example: make the tone warmer, cut it to 150 words, and add a stronger ending.",
+                    on_change=remember_draft,
+                    args=("revision_feedback", "revision_draft"),
                 )
                 cancel_col, send_col = st.columns([1, 2])
                 if cancel_col.button("Cancel", key="cancel_revision", use_container_width=True):
@@ -1584,6 +1631,8 @@ if result:
                 st.success(download_notice)
             if new_col.button("Start another task", use_container_width=True):
                 reset_run()
+                st.session_state.task_input = ""
+                st.session_state.task_draft = ""
                 st.session_state.page = "chat"
                 st.rerun()
             with st.expander("Read aloud"):
@@ -1646,6 +1695,71 @@ if result:
                     st.write("•", issue)
             else:
                 st.write("No blocking issues found.")
+
+    with comparison_tab:
+        st.markdown(
+            """
+            <section class="maf-compare-intro">
+              <b>Same request. Two interaction models.</b>
+              <span>Taskloom exposes its structured workflow and review artefacts. The baseline asks Gemini for one direct final response. This comparison does not claim access to Gemini's private reasoning.</span>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        direct_output = st.session_state.get("direct_gemini_output")
+        if not direct_output:
+            st.info("The comparison is optional. Starting it makes one additional Gemini request unless the same baseline is already in the local cache.")
+            if st.button(
+                "Generate direct Gemini baseline  →",
+                key="generate_direct_gemini",
+                type="primary",
+                use_container_width=True,
+            ):
+                try:
+                    with st.spinner("Gemini is producing the direct baseline…"):
+                        direct_output, was_cached, local_count = run_direct_gemini(
+                            st.session_state.get("original_request", "")
+                        )
+                        st.session_state.direct_gemini_output = direct_output
+                        st.session_state.direct_gemini_source = "local cache" if was_cached else "Gemini API"
+                        st.session_state.local_requests_today = local_count
+                    st.rerun()
+                except Exception as exc:
+                    show_run_error(exc)
+        else:
+            taskloom_stats = output_statistics(current_output)
+            gemini_stats = output_statistics(direct_output)
+            summary = st.columns(4)
+            summary[0].metric("Taskloom words", taskloom_stats.words)
+            summary[1].metric("Direct Gemini words", gemini_stats.words)
+            summary[2].metric("Taskloom review", f"{result.review.score}/10")
+            summary[3].metric("Baseline source", st.session_state.get("direct_gemini_source", "Gemini API"))
+
+            taskloom_col, gemini_col = st.columns(2)
+            with taskloom_col:
+                with st.container(key="comparison_taskloom"):
+                    st.markdown("#### Taskloom output")
+                    st.markdown(current_output)
+            with gemini_col:
+                with st.container(key="comparison_gemini"):
+                    st.markdown("#### Direct Gemini output")
+                    st.markdown(direct_output)
+
+            st.markdown(
+                f"""
+                <table class="maf-compare-table">
+                  <thead><tr><th>Dimension</th><th>Taskloom</th><th>Direct Gemini</th></tr></thead>
+                  <tbody>
+                    <tr><td>Visible workflow</td><td>Intent, constraints, agent map and communication trace</td><td>Final response only in this view</td></tr>
+                    <tr><td>Quality control</td><td>Reviewer Agent score and findings</td><td>No separate review stage</td></tr>
+                    <tr><td>Human control</td><td>Approve or request a focused revision</td><td>Continue with another prompt</td></tr>
+                    <tr><td>Output shape</td><td>{taskloom_stats.paragraphs} paragraphs · {taskloom_stats.characters} characters</td><td>{gemini_stats.paragraphs} paragraphs · {gemini_stats.characters} characters</td></tr>
+                  </tbody>
+                </table>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.caption("The numerical measurements are calculated locally. Quality should be judged against the original request, not by length alone.")
 
 st.markdown(
     '<div class="maf-footer">TASKLOOM · Hierarchical task decomposition · Structured agent communication · Natural language generation</div>',
