@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 from datetime import datetime, timedelta
 from html import escape
 from pathlib import Path
@@ -217,6 +218,10 @@ def inject_theme() -> None:
         .stApp [data-testid="stMarkdownContainer"] blockquote,.stApp [data-testid="stMarkdownContainer"] small { color:rgba(245,241,232,.78)!important; }
         .maf-kicker,.maf-section-label,.maf-eyebrow,.maf-info-card dt,.maf-map-detail i,
         .maf-architecture-detail i,.maf-architecture-flow i,.maf-trace strong { color:#b9c7ff!important; }
+        .maf-usage-limit { background:rgba(12,25,51,.96)!important;border-color:rgba(203,213,255,.36)!important;box-shadow:0 18px 42px rgba(0,0,0,.30)!important; }
+        .maf-usage-limit h3 { color:#f5f1e8!important; }
+        .maf-usage-limit p { color:rgba(245,241,232,.82)!important; }
+        .maf-usage-limit .maf-kicker { color:#b9c7ff!important; }
         div[data-testid="stElementContainer"]:has(.maf-back-anchor) + div[data-testid="stElementContainer"] .stButton > button {
           width:12rem!important;max-width:none!important;min-height:2.35rem!important;overflow:visible!important;clip-path:none!important;
           padding:.35rem 0!important;white-space:nowrap!important;
@@ -1003,16 +1008,16 @@ def render_usage_page() -> None:
         <section class="maf-panel-hero">
           <div class="maf-kicker">Private Gemini connection</div>
           <h1>YOU'RE<br>READY TO WEAVE.</h1>
-          <p>Your keys are saved only on this device. Start a task when you are ready; Taskloom uses your primary key first and preserves the backup for a 429 rate limit.</p>
+          <p>Your keys are saved only on this device. Taskloom uses your primary key first and tries the backup after a 429. Keys from the same Google project share that project's quota.</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
     backup_state = "Ready for 429 failover" if settings.gemini_backup_api_key else "Not added yet"
     backup_detail = (
-        "Taskloom tries it only after the primary key is rate-limited."
+        "Tried after a primary-key 429. It cannot bypass quota shared by keys in the same Google project."
         if settings.gemini_backup_api_key
-        else "Optional: add one for uninterrupted work when the primary key hits a 429 limit."
+        else "Optional: use a key from another eligible Google project for independent quota."
     )
     st.markdown(
         f"""
@@ -1225,17 +1230,25 @@ def reset_run() -> None:
 
 
 def show_run_error(exc: Exception) -> None:
-    details = str(exc)
-    quota_error = any(token in details.lower() for token in ("429", "quota", "resource_exhausted"))
-    if quota_error:
+    details = re.sub(r"AIza[\w-]+", "[REDACTED API KEY]", str(exc))
+    quota_error = any(token in details.lower() for token in ("429", "resource_exhausted", "quota_exceeded"))
+    overload_error = any(token in details.lower() for token in ("503", "504", "unavailable", "deadline_exceeded"))
+    if quota_error or overload_error:
+        heading = "Gemini rejected this request." if quota_error else "Gemini is temporarily overloaded."
+        explanation = (
+            "Google returned a 429 project quota or rate-limit error. Taskloom's local counter is not Google's quota. "
+            "Keys from the same Google project share that limit; check your project's active limits in Google AI Studio."
+            if quota_error else
+            "Google returned a temporary 503/504 capacity error. Your request is preserved; try again shortly."
+        )
         st.markdown(
-            """
+            f"""
             <section class="maf-usage-limit" role="status">
               <div class="maf-usage-limit-mark">•</div>
               <div>
                 <div class="maf-kicker">Gemini temporarily unavailable</div>
-                <h3>Gemini rate-limited this request.</h3>
-                <p>Your work is safe. Gemini returned a provider quota or rate-limit response; this is separate from the local call counter shown in this app. Please wait a moment and try again.</p>
+                <h3>{escape(heading)}</h3>
+                <p>{escape(explanation)}</p>
               </div>
             </section>
             """,
@@ -1245,6 +1258,10 @@ def show_run_error(exc: Exception) -> None:
             st.session_state.page = "usage"
             preserve_theme_query()
             st.rerun()
+        if quota_error:
+            st.link_button("Check Google AI Studio rate limits", "https://aistudio.google.com/rate-limit")
+        with st.expander("Provider details"):
+            st.code(details)
         return
     else:
         st.error("Gemini could not complete this run. Check the connection and try again.")

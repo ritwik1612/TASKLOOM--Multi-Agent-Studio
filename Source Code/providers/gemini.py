@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from datetime import datetime
 from typing import TypeVar
 
@@ -18,6 +19,11 @@ def is_rate_limit_error(exc: Exception) -> bool:
     """Return whether Gemini rejected a request because capacity/quota was exhausted."""
     details = str(exc).lower()
     return any(marker in details for marker in ("429", "resource_exhausted", "rate limit", "quota"))
+
+
+def is_temporary_provider_error(exc: Exception) -> bool:
+    details = str(exc).lower()
+    return any(marker in details for marker in ("503", "504", "unavailable", "deadline_exceeded"))
 
 
 class GeminiProvider(LLMProvider):
@@ -41,6 +47,7 @@ class GeminiProvider(LLMProvider):
             ),
         )
         self.model = model
+        self.types = types
         cache_dir = application_data_dir() / "cache"
         self.cache = Cache(str(cache_dir))
         self.last_call_cached = False
@@ -63,6 +70,16 @@ class GeminiProvider(LLMProvider):
         material = f"{self.model}\0{response_type}\0{schema_name}\0{prompt}".encode("utf-8")
         return "gemini:" + hashlib.sha256(material).hexdigest()
 
+    @staticmethod
+    def _retry_temporary(call):
+        for attempt in range(3):
+            try:
+                return call()
+            except Exception as exc:
+                if attempt == 2 or not is_temporary_provider_error(exc):
+                    raise
+                time.sleep(1.5 * (2 ** attempt))
+
     async def generate_structured(self, prompt: str, schema: type[T]) -> T:
         self.last_call_kind = "preview"
         cache_key = self._cache_key("structured", prompt, schema.__name__)
@@ -74,16 +91,34 @@ class GeminiProvider(LLMProvider):
         self.last_call_cached = False
 
         def call() -> T:
-            response = self.client.interactions.create(
-                model=self.model,
-                input=prompt,
-                response_format={
-                    "type": "text",
-                    "mime_type": "application/json",
-                    "schema": schema.model_json_schema(),
-                },
+            # Keep the request compact: native schema mode currently rejects
+            # semantic_frame's open-ended object, and large schemas can trigger
+            # provider overload before any response is generated.
+            shape = (
+                '{"analysis":{"original_text":"","normalized_text":"","intent":""},'
+                '"plan":{"goal":"","tasks":[{"id":"task_1","title":"",'
+                '"objective":"","assigned_role":"Specific Specialist",'
+                '"dependencies":[]}]},"worker_results":[{"task_id":"task_1",'
+                '"title":"","content":""}],"review":{"approved":true,'
+                '"score":8,"strengths":[],"issues":[]},"final_answer":""}'
             )
-            validated = schema.model_validate_json(response.output_text)
+            response = self._retry_temporary(lambda: self.client.models.generate_content(
+                model=self.model,
+                contents=f"{prompt}\n\nReturn ONLY one valid JSON object in this shape, filling every value with task-specific content: {shape}",
+                config=self.types.GenerateContentConfig(
+                    automatic_function_calling=self.types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            ))
+            if not response.text:
+                raise ValueError("Gemini returned an empty structured response.")
+            payload = response.text.strip()
+            if payload.startswith("```json"):
+                payload = payload[7:]
+            elif payload.startswith("```"):
+                payload = payload[3:]
+            if payload.endswith("```"):
+                payload = payload[:-3]
+            validated = schema.model_validate_json(payload.strip())
             self.cache.set(cache_key, validated.model_dump_json(), expire=604_800)
             self._record_api_success()
             return validated
@@ -101,13 +136,18 @@ class GeminiProvider(LLMProvider):
         self.last_call_cached = False
 
         def call() -> str:
-            response = self.client.interactions.create(
+            response = self._retry_temporary(lambda: self.client.models.generate_content(
                 model=self.model,
-                input=prompt,
-            )
-            self.cache.set(cache_key, response.output_text, expire=604_800)
+                contents=prompt,
+                config=self.types.GenerateContentConfig(
+                    automatic_function_calling=self.types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            ))
+            if not response.text:
+                raise ValueError("Gemini returned an empty text response.")
+            self.cache.set(cache_key, response.text, expire=604_800)
             self._record_api_success()
-            return response.output_text
+            return response.text
 
         return await asyncio.to_thread(call)
 
@@ -145,7 +185,8 @@ class GeminiFailoverProvider(LLMProvider):
             return response
 
         raise RuntimeError(
-            "Gemini returned 429/rate-limit responses for every configured API key."
+            "Gemini returned 429 for every configured API key. "
+            f"Last provider response: {last_rate_limit}"
         ) from last_rate_limit
 
     async def generate_structured(self, prompt: str, schema: type[T]) -> T:

@@ -32,7 +32,7 @@ Gemini is the language model that can generate or validate material. Taskloom is
 | You submit a prompt and receive a response | You submit one request and receive a planned, reviewable workflow plus the response |
 | The transformation process is mostly opaque | Intent, constraints, logical roles, task assignments, and review outcomes are displayed |
 | One general interaction | Structured specialist roles such as understanding, planning, worker, reviewer, and writer |
-| You must manage repeated requests and rate limits yourself | Local caching, local request accounting, and a primary/backup key path for Gemini 429 responses |
+| You must manage repeated requests and rate limits yourself | Local caching, local request accounting, clear quota errors, and bounded retries for temporary provider failures |
 | Final text is the primary output | Final text plus an agent map, language trace, review record, and revision controls |
 
 Taskloom does **not** claim access to Gemini’s private reasoning. Its visible traces describe Taskloom’s own Python-managed workflow and validated structured output.
@@ -113,6 +113,8 @@ After approving an output, choose **Download content** and select Markdown, plai
 | Both keys receive 429 | Clearly reports the rate limit instead of silently cycling keys |
 | Exact repeated request | Can be served from the local cache without a new Gemini call |
 | Save key | Stores it in **Windows Credential Manager**; saving itself does not use quota |
+
+The default model is `gemini-3.1-flash-lite`, called through Gemini's standard `generateContent` API. An initial preview normally uses one successful model response; temporary 503/504 capacity failures may be retried up to two times. A 429 project-quota error is not repeatedly retried. **Two API keys from the same Google project share that project's quota**, so a backup key only provides independent quota if it belongs to a different eligible project. Taskloom's local daily budget is not your live Google quota—check your project's active limits in [Google AI Studio](https://aistudio.google.com/rate-limit).
 
 Never share your API keys in screenshots, messages, or repositories. Taskloom does not store them in this project folder.
 

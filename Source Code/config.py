@@ -15,7 +15,7 @@ class Settings:
     provider: str = os.getenv("APP_PROVIDER", "mock").lower()
     gemini_api_key: str | None = None
     gemini_backup_api_key: str | None = None
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     max_tasks: int = 4
     max_parallel_workers: int = 3
     max_revisions: int = 1
