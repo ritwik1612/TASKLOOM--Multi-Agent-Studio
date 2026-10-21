@@ -25,7 +25,7 @@ def star_svg() -> str:
     </svg>'''
 
 
-def styles(night_sky_uri: str) -> str:
+def styles(night_sky_uri: str, ribbon_uri: str) -> str:
     return '''<style>
       :root{--v2-bg:#020611;--v2-panel:#081328;--v2-line:rgba(180,201,245,.17);--v2-text:#f5f1e8;--v2-soft:#b8c2d8;--v2-cobalt:#3159df}
       html,body,[data-testid="stAppViewContainer"],.stApp{background:#020611!important;color:var(--v2-text)!important}
@@ -107,5 +107,60 @@ def styles(night_sky_uri: str) -> str:
       }
       @media(max-width:390px){.st-key-v2_sidebar{top:68px}.maf-hero h1,.maf-hero h1 span{font-size:13vw!important}}
       @media(prefers-reduced-motion:reduce){.v2-star .v2-hub{animation:none!important}.v2-star .v2-flow{display:none!important}}
+      /* The silver-and-cobalt woven mark from the approved browser concept. */
+      div[data-testid="stElementContainer"]:has(.maf-home-native-anchor)+div[data-testid="stElementContainer"] .stButton>button{
+        background:transparent!important;filter:none!important;
+      }
+      div[data-testid="stElementContainer"]:has(.maf-home-native-anchor)+div[data-testid="stElementContainer"] .stButton>button::before{
+        content:""!important;display:block!important;position:absolute!important;left:0!important;top:2px!important;
+        width:39px!important;height:48px!important;background:linear-gradient(130deg,#3855a0 0%,#e6eeff 18%,#7f9fda 35%,#2445aa 53%,#d2def9 72%,#536caa 100%)!important;
+        -webkit-mask:url("__RIBBON__") center/contain no-repeat!important;mask:url("__RIBBON__") center/contain no-repeat!important;
+        filter:drop-shadow(0 1px 7px rgba(167,189,246,.35))!important;
+      }
+      div[data-testid="stElementContainer"]:has(.maf-home-native-anchor)+div[data-testid="stElementContainer"] .stButton>button::after{color:#f5f1e8!important}
+      .taskloom-splash img{display:none!important}
+      .taskloom-splash::after{content:"";display:block;position:relative;z-index:1;width:135px;height:155px;
+        background:linear-gradient(130deg,#3855a0 0%,#e6eeff 18%,#7f9fda 35%,#2445aa 53%,#d2def9 72%,#536caa 100%);
+        -webkit-mask:url("__RIBBON__") center/contain no-repeat;mask:url("__RIBBON__") center/contain no-repeat;
+        filter:drop-shadow(0 0 20px rgba(133,159,232,.2));animation:taskloom-ribbon-arrive .95s .08s var(--maf-ease) both;
+      }
+      .taskloom-splash strong{color:#e6eeff!important}
+      /* Shared chat/output workspace vocabulary: calm surfaces, square edges, flat cobalt actions. */
+      .block-container>.stVerticalBlock{gap:0!important}
+      .v3-page-intro{display:grid;grid-template-columns:1.2fr 1fr;column-gap:2rem;align-items:end;border-bottom:1px solid var(--v2-line);padding:.4rem 0 1.5rem;margin:1.5rem 0 1.4rem}
+      .v3-page-intro>span,.v3-work-head,.v3-chat-intro small,.v3-aside small{font:700 .67rem 'Courier Prime','Courier New',monospace;letter-spacing:.12em;color:#9fb6f2}
+      .v3-page-intro>span{grid-column:1;grid-row:1}
+      .v3-page-intro>[data-testid="stHeadingWithActionElements"]{grid-column:1;grid-row:2}
+      .v3-page-intro>p{grid-column:2;grid-row:1/span 2;align-self:end}
+      .v3-page-intro h1{font:400 clamp(2.6rem,5vw,4.4rem)/.98 'Taskloom Olivera',Georgia,serif!important;margin:.8rem 0 0;letter-spacing:-.055em!important}
+      .v3-page-intro p{color:#bdc8df;font-size:.88rem;line-height:1.7;margin:0;max-width:440px}
+      .st-key-v3_chat_main,.st-key-v3_chat_aside{background:#080d1d;border:1px solid var(--v2-line);padding:1.7rem}
+      .st-key-v3_chat_main .stButton>button:not([kind="primary"]){background:#0b1329!important;border-color:#273856!important}
+      .st-key-v3_chat_main .stButton>button:hover,.st-key-v3_chat_aside .stButton>button:hover{background:#152758!important;border-color:#5778cd!important}
+      .v3-work-head{display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--v2-line);padding-bottom:1rem}
+      .v3-work-head span:last-child{color:#9ca9c3}
+      .v3-chat-intro{padding:2.2rem 0 1rem}
+      .v3-chat-intro h2{font:400 clamp(2.2rem,4vw,3.6rem)/1 'Taskloom Olivera',Georgia,serif!important;margin:.8rem 0!important}
+      .v3-chat-intro p,.v3-aside p{color:#bdc8df;font-size:.82rem;line-height:1.8}
+      .v3-chat-intro p{max-width:640px}
+      .st-key-v3_chat_main [data-testid="stTextArea"] textarea{min-height:164px!important;border-color:#304474!important}
+      .st-key-v3_chat_main [data-testid="stCaptionContainer"]{color:#8998bb!important;font-size:.7rem!important}
+      .v3-aside h3{font:400 2rem/1.07 'Taskloom Olivera',Georgia,serif!important;margin:1.5rem 0!important}
+      .v3-aside p{border-top:1px solid var(--v2-line);padding-top:1.2rem;line-height:2.4}
+      .maf-workspace-head{border-bottom:1px solid var(--v2-line)!important;padding:0 0 1.35rem!important;margin:1.4rem 0!important}
+      .maf-workspace-head h2{font:400 clamp(2.5rem,5vw,4.2rem)/1 'Taskloom Olivera',Georgia,serif!important}
+      [data-testid="stMetric"]{background:#080d1d!important;min-height:104px;padding:.9rem 1rem!important}
+      [data-testid="stTabs"] [role="tablist"]{border:1px solid var(--v2-line);background:#080d1d;padding:.3rem!important;gap:.25rem!important}
+      [data-testid="stTabs"] [role="tab"]{padding:.7rem 1rem!important;border:0!important;color:#c2cce0!important}
+      [data-testid="stTabs"] [role="tab"][aria-selected="true"]{background:#f1eee5!important;color:#0b1222!important}
+      [data-testid="stTabs"] [role="tab"][aria-selected="true"] *{color:#0b1222!important}
+      .maf-role{clip-path:none!important;background:#3159df!important}
+      .st-key-output_content{padding:1.5rem!important;background:#080d1d!important}
+      .maf-usage-limit{border-radius:0!important;background:#151515!important;border:1px solid #a59475!important;box-shadow:none!important}
+      .maf-usage-limit h3{color:#f5f1e8!important}.maf-usage-limit p{color:#d0c9bf!important}
+      .maf-usage-limit-mark{border-radius:0!important;background:#3159df!important;color:#fff!important}
+      .v3-error-code{font:700 .66rem 'Courier Prime','Courier New',monospace;letter-spacing:.1em;color:#e5c898;margin-bottom:.6rem}
+      @media(max-width:850px){.v3-page-intro{grid-template-columns:1fr;gap:.5rem}.v3-page-intro>p{grid-column:1;grid-row:3}.st-key-v3_chat_main,.st-key-v3_chat_aside{padding:1.2rem}}
+      @media(max-width:700px){div[data-testid="stElementContainer"]:has(.maf-home-native-anchor)+div[data-testid="stElementContainer"] .stButton>button::before{width:32px!important;height:40px!important}}
       *,*::before,*::after{border-radius:0!important}
-    </style>'''.replace("__NIGHT_SKY__", night_sky_uri)
+    </style>'''.replace("__NIGHT_SKY__", night_sky_uri).replace("__RIBBON__", ribbon_uri)

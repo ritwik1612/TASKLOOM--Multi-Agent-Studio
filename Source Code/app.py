@@ -1364,19 +1364,20 @@ def show_run_error(exc: Exception) -> None:
     quota_error = any(token in details.lower() for token in ("429", "resource_exhausted", "quota_exceeded"))
     overload_error = any(token in details.lower() for token in ("503", "504", "unavailable", "deadline_exceeded"))
     if quota_error or overload_error:
-        heading = "Gemini rejected this request." if quota_error else "Gemini is temporarily overloaded."
+        heading = "Gemini rate-limited this request." if quota_error else "Gemini is temporarily overloaded."
         explanation = (
-            "Google returned a 429 project quota or rate-limit error. Taskloom's local counter is not Google's quota. "
-            "Keys from the same Google project share that limit; check your project's active limits in Google AI Studio."
+            "No output was produced. Google returned a 429 project quota or rate-limit error. Your request is preserved. "
+            "Taskloom's local counter is not Google's quota; check your project's active limits in Google AI Studio."
             if quota_error else
-            "Google returned a temporary 503/504 capacity error. Your request is preserved; try again shortly."
+            "No output was produced. Google returned a temporary 503/504 capacity error. Your request is preserved; try again shortly."
         )
+        error_code = "GEMINI · 429 RATE LIMIT" if quota_error else "GEMINI · 503 / 504 CAPACITY"
         st.markdown(
             f"""
-            <section class="maf-usage-limit" role="status">
+            <section class="maf-usage-limit" role="alert">
               <div class="maf-usage-limit-mark">•</div>
               <div>
-                <div class="maf-kicker">Gemini temporarily unavailable</div>
+                <div class="v3-error-code">{escape(error_code)}</div>
                 <h3>{escape(heading)}</h3>
                 <p>{escape(explanation)}</p>
               </div>
@@ -1384,9 +1385,12 @@ def show_run_error(exc: Exception) -> None:
             """,
             unsafe_allow_html=True,
         )
-        if st.button("View local call counter", key="quota_usage_link"):
-            st.session_state.page = "usage"
-            preserve_theme_query()
+        action_col, account_col = st.columns(2)
+        if action_col.button("Edit preserved request", key="error_edit_request", use_container_width=True):
+            st.session_state.page = "chat"
+            st.rerun()
+        if account_col.button("Account & keys", key="error_account_keys", use_container_width=True):
+            st.session_state.page = "connection"
             st.rerun()
         if quota_error:
             st.link_button("Check Google AI Studio rate limits", "https://aistudio.google.com/rate-limit")
@@ -1394,7 +1398,7 @@ def show_run_error(exc: Exception) -> None:
             st.code(details)
         return
     else:
-        st.error("Gemini could not complete this run. Check the connection and try again.")
+        st.error("No output was produced. Your request is preserved; check the connection and try again.")
     with st.expander("Technical details"):
         st.code(details)
 
@@ -1437,8 +1441,8 @@ ribbon_logo_path = resource_path("assets", "taskloom-ribbon-logo-transparent.png
 ribbon_logo_src = "data:image/png;base64," + base64.b64encode(ribbon_logo_path.read_bytes()).decode("ascii")
 gemini_logo_path = resource_path("assets", "gemini-logo.png")
 gemini_logo_src = "data:image/png;base64," + base64.b64encode(gemini_logo_path.read_bytes()).decode("ascii")
-inject_navigation_asset_styles(ribbon_logo_src, bool(settings.gemini_api_key))
-st.markdown(v2_styles(night_sky_uri), unsafe_allow_html=True)
+inject_navigation_asset_styles(night_ribbon_logo_src, bool(settings.gemini_api_key))
+st.markdown(v2_styles(night_sky_uri, night_ribbon_logo_src), unsafe_allow_html=True)
 
 if not st.session_state.get("splash_seen"):
     st.markdown(
@@ -1563,52 +1567,62 @@ if st.session_state.page == "output":
     render_panel_back("output_back", destination="chat", label="← Edit request")
 else:
     render_panel_back("chat_back")
-
-    st.markdown(
-        """
-        <section class="maf-chat-intro">
-          <svg class="maf-chat-network" viewBox="0 0 850 510" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-            <path d="M790 -25 C680 78, 637 140, 520 222 S315 345, 58 520"/>
-            <path d="M870 95 C696 137, 614 180, 520 222 S319 244, 40 222"/>
-            <path d="M655 -20 C615 98, 577 164, 520 222 S431 380, 380 530"/>
-            <path class="network-fine" d="M870 350 C692 330, 617 274, 520 222 S344 82, 255 -20"/>
-            <circle cx="520" cy="222" r="6"/><circle cx="614" cy="180" r="3"/><circle cx="431" cy="380" r="3"/>
-          </svg>
-          <div class="maf-kicker">Taskloom workspace</div>
-          <h1>WHAT WILL<br>WE MAKE?</h1>
-          <p>Tell us what you need. We will put it together for you.</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown('<div class="maf-section-label">New conversation</div>', unsafe_allow_html=True)
-
     if "task_input" not in st.session_state:
         st.session_state.task_input = st.session_state.get("task_draft", "")
     if "task_draft" not in st.session_state:
         st.session_state.task_draft = st.session_state.task_input
-
-    _, composer, _ = st.columns([1, 10, 1])
-    with composer:
-        prompt = st.text_area(
-            "Task",
-            key="task_input",
-            height=124,
-            on_change=remember_draft,
-            args=("task_input", "task_draft"),
-        )
-        action_col, clear_col = st.columns([5, 1])
-        with action_col:
-            run_clicked = st.button(
-                "Weave this task  →", type="primary", use_container_width=True, disabled=not connected,
+    st.markdown(
+        '<div class="v3-page-intro"><span>02 / CHAT WORKSPACE</span><h1>Start with the task.</h1>'
+        '<p>Write naturally. Taskloom makes the plan, specialist handoffs, and review visible before you decide what to keep.</p></div>',
+        unsafe_allow_html=True,
+    )
+    chat_main, chat_aside = st.columns([2.4, 1], gap="medium")
+    with chat_main:
+        with st.container(key="v3_chat_main"):
+            st.markdown(
+                '<div class="v3-work-head"><span>NEW CONVERSATION</span><span>READY TO COMPOSE</span></div>'
+                '<div class="v3-chat-intro"><small>YOU → HOST AGENT</small><h2>What should the team make?</h2>'
+                '<p>Give the outcome, audience, tone, and any limits. You can refine it after seeing the reviewable result.</p></div>',
+                unsafe_allow_html=True,
             )
-        with clear_col:
-            if st.button("Clear", use_container_width=True):
-                reset_run()
-                st.session_state.task_input = ""
-                st.session_state.task_draft = ""
+            sample_cols = st.columns(3)
+            samples = (
+                ("School speech ↗", "Write a one-minute Independence Day speech for an Indian school audience."),
+                ("Project proposal ↗", "Draft a concise project proposal for a student-led campus recycling programme, with goals and a timeline."),
+                ("Explain an idea ↗", "Compare three ways to explain a complex AI system to a non-technical audience."),
+            )
+            for sample_index, ((label, value), column) in enumerate(zip(samples, sample_cols)):
+                if column.button(label, key=f"v3_sample_{sample_index}", use_container_width=True):
+                    st.session_state.task_input = value
+                    st.session_state.task_draft = value
+                    st.rerun()
+            prompt = st.text_area(
+                "Your request", key="task_input", height=164,
+                on_change=remember_draft, args=("task_input", "task_draft"),
+            )
+            clear_col, action_col = st.columns([1, 2])
+            with clear_col:
+                if st.button("Clear draft", key="v3_clear_draft", use_container_width=True):
+                    reset_run()
+                    st.session_state.task_input = ""
+                    st.session_state.task_draft = ""
+                    st.rerun()
+            with action_col:
+                run_clicked = st.button(
+                    "Run this task  →", key="v3_run_task", type="primary",
+                    use_container_width=True, disabled=not connected,
+                )
+            st.caption("One request creates the complete preview. Exact repeats are served locally without another Gemini call.")
+    with chat_aside:
+        with st.container(key="v3_chat_aside"):
+            st.markdown(
+                '<div class="v3-aside"><small>HOW THIS RUN WORKS</small><h3>One request.<br>Visible stages.</h3>'
+                '<p>01&nbsp; Interpret the request<br>02&nbsp; Assign bounded work<br>03&nbsp; Inspect the result<br>04&nbsp; Approve or revise</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Open local history  ↗", key="v3_open_history", use_container_width=True):
+                st.session_state.page = "history"
                 st.rerun()
-        st.caption("↳ One request creates the complete preview. Exact repeats are served locally without using Gemini quota.")
 
     if not connected:
         st.warning("Connect your personal Gemini API keys from the Gemini button before starting a task.")
@@ -1650,10 +1664,16 @@ if result:
     roles = list(dict.fromkeys(task.assigned_role for task in result.plan.tasks))
     accepted = bool(st.session_state.get("accepted"))
     st.markdown(
+        '<div class="v3-page-intro"><span>03 / RESULT WORKSPACE</span>'
+        '<h1>See how it came together.</h1>'
+        '<p>Read the answer, inspect every visible stage, then approve it or ask the team to revise.</p></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
         f"""
         <div class="maf-workspace-head">
           <div><div class="maf-eyebrow">Current run · {escape(st.session_state.get('response_source', 'Gemini API'))}</div>
-          <h2>{'Approved content' if accepted else 'Review the preview'}</h2></div>
+          <h2>{'Approved content' if accepted else 'Reviewable result'}</h2></div>
           <div class="maf-live"><i></i>{'Finalized' if accepted else 'Awaiting your decision'}</div>
         </div>
         """,
@@ -1667,7 +1687,7 @@ if result:
     metrics[2].metric(review_label, f"{result.review.score}/10")
     metrics[3].metric(
         "Local API calls today",
-        st.session_state.get("local_requests_today", "—"),
+        st.session_state.get("local_requests_today", local_usage_snapshot()[0] if connected else "—"),
         help="Successful uncached Gemini calls made by this app today. Google AI Studio is the authoritative quota source.",
     )
     badges = "".join(f'<span class="maf-role">{escape(role)}</span>' for role in roles)
