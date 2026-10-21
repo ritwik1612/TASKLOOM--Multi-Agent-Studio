@@ -77,7 +77,7 @@ def launch_desktop_window() -> int:
             url,
             width=1440,
             height=920,
-            min_size=(1024, 700),
+            min_size=(390, 640),
             resizable=True,
             text_select=True,
         )

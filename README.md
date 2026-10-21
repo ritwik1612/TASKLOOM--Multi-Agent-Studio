@@ -37,7 +37,7 @@ Gemini is the language model that can generate or validate material. Taskloom is
 
 Taskloom does **not** claim access to Gemini’s private reasoning. Its visible traces describe Taskloom’s own Python-managed workflow and validated structured output.
 
-The optional **Gemini comparison** tab sends the same request through a direct, one-response Gemini baseline, then presents both outputs side by side with deterministic local measurements. It is deliberately opt-in because it may use one additional API request. Taskloom also preserves unfinished prompts and revision notes when the user switches between day and night mode.
+The optional **Gemini comparison** tab sends the same request through a direct, one-response Gemini baseline, then presents both outputs side by side with deterministic local measurements. It is deliberately opt-in because it may use one additional API request. Taskloom keeps a dark cobalt interface and preserves unfinished prompts and revision notes while you navigate between pages.
 
 ---
 
@@ -80,8 +80,8 @@ The coordinator is deterministic Python orchestration. The role names represent 
 
 ## Install Taskloom on Windows
 
-1. Open [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest) and download **`Taskloom-Windows-v1.0.2.zip`**.
-2. Extract the ZIP, then double-click **`Taskloom Setup.exe`**.
+1. Open [Releases](https://github.com/ritwik1612/TASKLOOM--Multi-Agent-Studio/releases/latest) and download **`Taskloom Setup.exe`** from the v2 release.
+2. Double-click **`Taskloom Setup.exe`**.
 3. Approve the Windows prompt. The default location is **`C:\Program Files\Taskloom`**.
 4. Keep the default or choose **Browse** to install somewhere else.
 5. Leave **Open Taskloom when installation finishes** selected to begin immediately.
@@ -89,6 +89,8 @@ The coordinator is deterministic Python orchestration. The role names represent 
 No command line, Python installation, or development setup is needed for normal use.
 
 After installation, search the Windows Start menu for **Taskloom**. The installer creates a Start-menu shortcut automatically.
+
+The v2 interface includes a logo-opened navigation menu, a local History page, dedicated workflow and architecture views, and a layout that adapts to narrow windows. History is stored only on this PC under `%LOCALAPPDATA%\Taskloom\history`; it does not contain your API keys. The installer is for Windows, while the responsive layout can also be previewed in a phone browser during development.
 
 ### Download generated content
 

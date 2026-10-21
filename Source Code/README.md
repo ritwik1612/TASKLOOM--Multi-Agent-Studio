@@ -39,7 +39,7 @@ Gemini is the model that generates or validates the structured result. Taskloom 
 
 Taskloom also includes an optional **Gemini comparison** tab. It sends the same request through a direct, one-response Gemini baseline and places both outputs side by side with transparent local measurements. The baseline is opt-in because it can use one additional API request.
 
-Unfinished prompts and revision notes are preserved when switching between day and night mode, so changing the visual theme does not interrupt the user's work.
+The v2 interface uses a dark cobalt theme and preserves unfinished prompts and revision notes while navigating between pages. The local History page saves completed requests on this PC without saving API keys.
 
 The named “agents” are logical Python roles coordinated by the application. Gemini is called once for the configured provider path; Taskloom then reconstructs and presents the specialist workflow locally. This makes the demonstration transparent without claiming that Gemini exposes its private chain of thought.
 

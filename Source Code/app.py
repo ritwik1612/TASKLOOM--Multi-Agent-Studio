@@ -14,9 +14,12 @@ from artifacts import build_artifact_pdf
 from comparison import build_direct_gemini_prompt, output_statistics
 from config import refresh_credentials, settings
 from credential_store import delete_api_key, save_api_key, secure_storage_available
+from history_store import list_runs, load_run, save_run
 from orchestrator import Orchestrator
 from paths import resource_path, save_to_downloads
 from providers import GeminiFailoverProvider
+from schemas import RunResult
+from v2_ui import star_svg, styles as v2_styles
 
 
 st.set_page_config(
@@ -46,9 +49,9 @@ def humanize_task_id(task_id: str) -> str:
 
 
 def preserve_theme_query() -> None:
-    """Keep the selected visual mode when a navigation action clears panel routes."""
+    """Keep the night-only interface when a navigation action clears panel routes."""
     st.query_params.clear()
-    st.query_params["theme"] = "night" if st.session_state.get("night_mode", False) else "light"
+    st.query_params["theme"] = "night"
 
 
 def remember_draft(widget_key: str, draft_key: str) -> None:
@@ -845,6 +848,25 @@ def run_direct_gemini(text: str):
     return output, provider.last_call_cached, provider.successful_requests_today()
 
 
+def persist_current_run() -> None:
+    """Save the active conversation locally without blocking a completed run."""
+    result = st.session_state.get("result")
+    prompt = st.session_state.get("original_request", "")
+    if not result or not prompt:
+        return
+    try:
+        st.session_state.history_id = save_run(
+            prompt,
+            result.model_dump(mode="json"),
+            run_id=st.session_state.get("history_id"),
+            approved=bool(st.session_state.get("accepted")),
+            final_output=st.session_state.get("final_output"),
+        )
+        st.session_state.pop("history_warning", None)
+    except (OSError, ValueError, TypeError) as exc:
+        st.session_state.history_warning = f"The preview is ready, but could not be saved to local history: {exc}"
+
+
 def local_usage_snapshot() -> tuple[int, int, int]:
     """Return Taskloom's own successful-call count, never pretending to know global key usage."""
     if not settings.gemini_api_key:
@@ -879,21 +901,54 @@ def render_agent_menu() -> None:
 
 
 def render_home_logo_control() -> None:
-    """Place a native button over the visual mark so Home navigation is reliable."""
+    """Use the logo as the navigation drawer toggle."""
     st.markdown('<div class="maf-home-native-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
-    if st.button("Taskloom home", key="taskloom_home_logo"):
-        st.session_state.page = "home"
-        preserve_theme_query()
+    if st.button("Taskloom menu", key="taskloom_home_logo"):
+        st.session_state.menu_open = not st.session_state.get("menu_open", False)
         st.rerun()
 
 
 def render_gemini_usage_control() -> None:
-    """Provide a native, in-app action over the Gemini connection badge."""
+    """Open account and keys from the Gemini connection badge."""
     st.markdown('<div class="maf-gemini-native-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     if st.button("Taskloom Gemini usage", key="taskloom_gemini_usage"):
-        st.session_state.page = "usage"
+        st.session_state.page = "connection"
+        st.session_state.menu_open = False
         preserve_theme_query()
         st.rerun()
+
+
+def render_home_shortcut() -> None:
+    if st.session_state.get("page") == "home":
+        return
+    st.markdown('<div class="v2-home-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
+    if st.button("⌂ HOME", key="v2_home_shortcut"):
+        st.session_state.page = "home"
+        st.session_state.menu_open = False
+        preserve_theme_query()
+        st.rerun()
+
+
+def render_v2_sidebar() -> None:
+    if not st.session_state.get("menu_open", False):
+        return
+    with st.container(key="v2_sidebar"):
+        st.markdown("NAVIGATION / TASKLOOM")
+        st.markdown("## Where to?")
+        destinations = [
+            ("Home", "home"), ("Studio", "chat"), ("History", "history"),
+            ("Workflow", "agent_map"), ("Architecture", "architecture"),
+            ("Account & keys", "connection"), ("Local usage", "usage"),
+        ]
+        for label, destination in destinations:
+            if st.button(label, key=f"v2_nav_{destination}", use_container_width=True):
+                st.session_state.page = destination
+                st.session_state.menu_open = False
+                preserve_theme_query()
+                st.rerun()
+        if st.button("Close menu", key="v2_nav_close", use_container_width=True):
+            st.session_state.menu_open = False
+            st.rerun()
 
 
 def render_theme_control() -> None:
@@ -1067,57 +1122,90 @@ def render_usage_page() -> None:
 def render_connection_page() -> None:
     """First-run onboarding for the packaged desktop app."""
     render_panel_back("connection_back")
-    st.markdown(
-        """
-        <section class="maf-panel-hero">
-          <div class="maf-kicker">Private device setup</div>
-          <h1>CONNECT<br>YOUR GEMINI.</h1>
-          <p>Set up your personal keys once, on this device. Taskloom uses them only for requests you choose to send.</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        <section class="maf-connect-steps">
-          <div class="maf-connect-step"><i>01 · CREATE</i><b>Make your key</b><p>Open Google AI Studio, choose <strong>Get API key</strong>, then create a key for your own Google project.</p></div>
-          <div class="maf-connect-step"><i>02 · ADD A SPARE</i><b>Optional, recommended</b><p>Create a second key if you want continuity. It stays unused unless the primary key receives a Gemini 429 limit.</p></div>
-          <div class="maf-connect-step"><i>03 · SAVE LOCALLY</i><b>Keep control</b><p>Paste the key(s) below. Taskloom saves them to Windows Credential Manager—not to a project file or download.</p></div>
-        </section>
-        <section class="maf-security-strip">
-          <strong>Before you paste:</strong> API keys grant access to your Gemini quota. Do not share them in messages, screenshots, or repositories. Saving a key here does not make a Gemini request or use quota.
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.link_button("Open Google AI Studio  →", "https://aistudio.google.com/apikey", use_container_width=True)
+    already_connected = bool(settings.gemini_api_key)
+    if already_connected:
+        st.markdown(
+            f"""
+            <section class="maf-panel-hero">
+              <div class="maf-kicker">Private Gemini connection</div>
+              <h1>YOUR KEYS<br>ARE CONNECTED.</h1>
+              <p>Your primary key is saved in Windows Credential Manager. For security, saved keys are never shown here. You can keep using Taskloom or choose to update them.</p>
+            </section>
+            <section class="maf-connection-status">
+              <div><i>PRIMARY KEY</i><b>Connected</b><p>Stored securely on this device and used for new requests.</p></div>
+              <div><i>BACKUP KEY</i><b>{'Connected' if settings.gemini_backup_api_key else 'Not added'}</b><p>{'Tried only after a primary-key 429 response.' if settings.gemini_backup_api_key else 'Optional; you can add one when updating keys.'}</p></div>
+              <div><i>KEY PRIVACY</i><b>Never displayed</b><p>Empty fields during an update mean keep the saved key, not disconnect it.</p></div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        if not st.session_state.get("editing_gemini_keys", False):
+            use_col, update_col, remove_col = st.columns([2, 1, 1])
+            if use_col.button("Continue using Taskloom  →", type="primary", use_container_width=True):
+                st.session_state.page = "usage"
+                preserve_theme_query()
+                st.rerun()
+            if update_col.button("Update keys", use_container_width=True):
+                st.session_state.editing_gemini_keys = True
+                st.rerun()
+            if remove_col.button("Remove saved keys", use_container_width=True, key="connected_remove_keys"):
+                try:
+                    delete_api_key("primary")
+                    delete_api_key("backup")
+                    refresh_credentials()
+                    st.session_state.editing_gemini_keys = False
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Taskloom could not remove the saved keys: {exc}")
+            return
+
+    if not already_connected:
+        st.markdown(
+            """
+            <section class="maf-panel-hero">
+              <div class="maf-kicker">Private device setup</div>
+              <h1>CONNECT<br>YOUR GEMINI.</h1>
+              <p>Set up your personal keys once, on this device. Taskloom uses them only for requests you choose to send.</p>
+            </section>
+            <section class="maf-connect-steps">
+              <div class="maf-connect-step"><i>01 · CREATE</i><b>Make your key</b><p>Open Google AI Studio, choose <strong>Get API key</strong>, then create a key for your own Google project.</p></div>
+              <div class="maf-connect-step"><i>02 · ADD A SPARE</i><b>Optional, recommended</b><p>Create a second key if you want continuity. It stays unused unless the primary key receives a Gemini 429 limit.</p></div>
+              <div class="maf-connect-step"><i>03 · SAVE LOCALLY</i><b>Keep control</b><p>Paste the key(s) below. Taskloom saves them to Windows Credential Manager—not to a project file or download.</p></div>
+            </section>
+            <section class="maf-security-strip">
+              <strong>Before you paste:</strong> API keys grant access to your Gemini quota. Do not share them in messages, screenshots, or repositories. Saving a key here does not make a Gemini request or use quota.
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.link_button("Open Google AI Studio  →", "https://aistudio.google.com/apikey", use_container_width=True)
 
     if not secure_storage_available():
         st.error("Secure credential storage is not available in this installation. Install the packaged Taskloom desktop application before entering a key.")
         return
 
-    st.markdown('<div class="maf-section-label">Save keys on this device</div>', unsafe_allow_html=True)
-    primary_key = st.text_input("Primary Gemini API key · required", type="password", placeholder="Paste the key you will use most often", key="desktop_primary_key")
-    st.markdown('<p class="maf-key-help">This key is used first. It is stored securely in Windows Credential Manager and is never displayed after you save it.</p>', unsafe_allow_html=True)
-    backup_key = st.text_input("Backup Gemini API key · optional", type="password", placeholder="Paste a separate spare key for 429 failover", key="desktop_backup_key")
-    st.markdown('<p class="maf-key-help">The backup is not rotated on every request. Taskloom only tries it after Gemini rate-limits the primary key with a 429 response.</p>', unsafe_allow_html=True)
-    save_col, remove_col = st.columns([4, 1])
+    st.markdown('<div class="maf-section-label">Update keys on this device</div>' if already_connected else '<div class="maf-section-label">Save keys on this device</div>', unsafe_allow_html=True)
+    primary_key = st.text_input("New primary Gemini API key · leave blank to keep saved key" if already_connected else "Primary Gemini API key · required", type="password", placeholder="Only paste a new key if you want to replace the saved one" if already_connected else "Paste the key you will use most often", key="desktop_primary_key")
+    st.markdown('<p class="maf-key-help">Saved keys are not displayed. An empty field keeps the current primary key.</p>' if already_connected else '<p class="maf-key-help">This key is used first. It is stored securely in Windows Credential Manager and is never displayed after you save it.</p>', unsafe_allow_html=True)
+    backup_key = st.text_input("New backup Gemini API key · leave blank to keep saved key" if already_connected else "Backup Gemini API key · optional", type="password", placeholder="Only paste a new key if you want to add or replace the backup" if already_connected else "Paste a separate spare key for 429 failover", key="desktop_backup_key")
+    st.markdown('<p class="maf-key-help">The backup is only tried after Gemini rate-limits the primary key. Leaving this field empty keeps any saved backup.</p>', unsafe_allow_html=True)
+    save_col, cancel_col = st.columns([4, 1])
     with save_col:
-        save_clicked = st.button("Save securely and connect  →", type="primary", use_container_width=True)
-    with remove_col:
-        remove_clicked = st.button("Remove saved keys", use_container_width=True, disabled=not bool(settings.gemini_api_key or settings.gemini_backup_api_key))
+        save_clicked = st.button("Save key changes  →" if already_connected else "Save securely and connect  →", type="primary", use_container_width=True)
+    with cancel_col:
+        cancel_clicked = st.button("Cancel update", use_container_width=True) if already_connected else False
 
     if save_clicked:
-        if not primary_key.strip():
+        if not primary_key.strip() and not already_connected:
             st.warning("Paste a primary Gemini API key to continue.")
         else:
             try:
-                save_api_key("primary", primary_key)
+                if primary_key.strip():
+                    save_api_key("primary", primary_key)
                 if backup_key.strip():
                     save_api_key("backup", backup_key)
-                elif settings.gemini_backup_api_key:
-                    delete_api_key("backup")
                 refresh_credentials()
+                st.session_state.editing_gemini_keys = False
                 st.session_state.just_connected = True
                 st.session_state.page = "usage"
                 preserve_theme_query()
@@ -1125,14 +1213,44 @@ def render_connection_page() -> None:
             except Exception as exc:
                 st.error(f"Taskloom could not save the keys securely: {exc}")
 
-    if remove_clicked:
+    if cancel_clicked:
+        st.session_state.editing_gemini_keys = False
+        st.rerun()
+
+
+def render_history_page() -> None:
+    render_panel_back("history_back")
+    st.markdown('<h1 class="v2-history-title">LOCAL HISTORY.<br>YOUR DEVICE.</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="v2-history-intro">Your prompts and completed previews stay on this PC. Gemini keys are never written to history.</p>', unsafe_allow_html=True)
+    records = list_runs()
+    if not records:
+        st.info("No saved tasks yet. A task appears here after its first completed preview.")
+    for record in records:
         try:
-            delete_api_key("primary")
-            delete_api_key("backup")
-            refresh_credentials()
-            st.success("Saved Gemini keys were removed from this device.")
-        except Exception as exc:
-            st.error(f"Taskloom could not remove the saved keys: {exc}")
+            when = datetime.fromisoformat(record["created_at"]).astimezone().strftime("%d %b %Y · %I:%M %p")
+        except (KeyError, ValueError, TypeError):
+            when = "Saved on this device"
+        prompt_label = record.get("prompt", "Untitled task").strip().replace("\n", " ")
+        st.markdown(
+            f'<div class="v2-history-record">{escape(when)} · {"APPROVED" if record.get("approved") else "PREVIEW"}<br>{escape(prompt_label[:220])}</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Open conversation →", key=f"open_history_{record['id']}"):
+            try:
+                restored = load_run(record["id"])
+                st.session_state.result = RunResult.model_validate(restored["result"])
+                st.session_state.original_request = restored["prompt"]
+                st.session_state.task_draft = restored["prompt"]
+                st.session_state.accepted = bool(restored.get("approved"))
+                st.session_state.final_output = restored.get("final_output") or st.session_state.result.final_answer
+                st.session_state.history_id = restored["id"]
+                st.session_state.response_source = "saved history"
+                st.session_state.revision_count = 0
+                st.session_state.page = "output"
+                preserve_theme_query()
+                st.rerun()
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                st.error(f"This saved conversation could not be reopened: {exc}")
 
 
 def render_agent_map_page() -> None:
@@ -1144,6 +1262,12 @@ def render_agent_map_page() -> None:
           <h1>ONE HOST.<br>MANY ROLES.</h1>
           <p>Each request is interpreted, decomposed, produced, reviewed, and returned as one human-readable result.</p>
         </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<div class="v2-diagram">{star_svg()}</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
         <section class="maf-agent-map">
           <div class="maf-agent-core"><span>Host Agent</span><small>Owns the workflow · routes information · preserves the task state</small></div>
           <div class="maf-agent-branches">
@@ -1180,6 +1304,12 @@ def render_architecture_page() -> None:
           <h1>THE PATH<br>OF A PROMPT.</h1>
           <p>Taskloom keeps the model call efficient while making the language-processing and approval stages visible.</p>
         </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<div class="v2-diagram">{star_svg()}</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
         <section class="maf-architecture-flow">
           <div><i>01</i><b>Natural-language request</b><span>User describes the outcome.</span></div>
           <em>→</em><div><i>02</i><b>SLP analysis</b><span>Intent, entities, tone, constraints.</span></div>
@@ -1224,7 +1354,7 @@ def reset_run() -> None:
     for key in (
         "result", "accepted", "final_output", "revision_count", "original_request",
         "response_source", "local_requests_today", "revision_mode", "revision_feedback",
-        "revision_draft", "direct_gemini_output", "direct_gemini_source",
+        "revision_draft", "direct_gemini_output", "direct_gemini_source", "history_id", "history_warning",
     ):
         st.session_state.pop(key, None)
 
@@ -1273,28 +1403,33 @@ def render_tts(text: str) -> None:
     safe = json.dumps(text)
     st.components.v1.html(
         f"""
-        <div style="display:flex;gap:8px;align-items:center;font:13px Arial;color:#d8dce2">
+        <style>body{{margin:0;background:#081328;color:#d7e2ff;font:13px 'Courier New',monospace}}button{{background:#102a61;color:#eef3ff;border:1px solid #4162b1;padding:9px 12px;cursor:pointer}}button:hover{{background:#3159df}}.controls{{display:flex;gap:7px;align-items:center;flex-wrap:wrap}}label{{white-space:nowrap}}</style>
+        <div class="controls">
           <button onclick='speak()'>▶ Read aloud</button>
           <button onclick='speechSynthesis.pause()'>Pause</button>
           <button onclick='speechSynthesis.resume()'>Resume</button>
           <button onclick='speechSynthesis.cancel()'>Stop</button>
-          <label>Speed <input id="rate" type="range" min="0.6" max="1.6" value="1" step="0.1"></label>
+          <label>Speed <input id="rate" type="range" min="0.7" max="1.2" value="0.9" step="0.05"></label>
         </div>
         <script>
           function speak() {{
             speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance({safe});
             utterance.rate = Number(document.getElementById('rate').value);
+            utterance.pitch = 1.03;
+            const voices = speechSynthesis.getVoices();
+            utterance.voice = voices.find(v => /^en[-_]IN$/i.test(v.lang) && /Neerja/i.test(v.name))
+              || voices.find(v => /^en[-_]IN$/i.test(v.lang))
+              || voices.find(v => /^en/i.test(v.lang)) || null;
             speechSynthesis.speak(utterance);
           }}
         </script>
         """,
-        height=52,
+        height=95,
     )
 
 
-if "night_mode" not in st.session_state:
-    st.session_state.night_mode = st.query_params.get("theme") == "night"
+st.session_state.night_mode = True
 
 inject_theme()
 
@@ -1303,6 +1438,7 @@ ribbon_logo_src = "data:image/png;base64," + base64.b64encode(ribbon_logo_path.r
 gemini_logo_path = resource_path("assets", "gemini-logo.png")
 gemini_logo_src = "data:image/png;base64," + base64.b64encode(gemini_logo_path.read_bytes()).decode("ascii")
 inject_navigation_asset_styles(ribbon_logo_src, bool(settings.gemini_api_key))
+st.markdown(v2_styles(night_sky_uri), unsafe_allow_html=True)
 
 if not st.session_state.get("splash_seen"):
     st.markdown(
@@ -1332,13 +1468,13 @@ status = (
     f'<img class="gemini-logo" src="{gemini_logo_src}" alt="Gemini">'
     '<span>GEMINI CONNECTED</span>'
     if connected
-    else '<span>GEMINI NOT CONFIGURED</span>'
+    else f'<img class="gemini-logo" src="{gemini_logo_src}" alt="Gemini"><span>CONNECT GEMINI</span>'
 )
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
 requested_panel = st.query_params.get("taskloom_panel")
-if requested_panel in {"usage", "agent_map", "architecture"}:
+if requested_panel in {"usage", "agent_map", "architecture", "history", "connection", "chat"}:
     st.session_state.page = requested_panel
 elif requested_panel == "home":
     st.session_state.page = "home"
@@ -1373,8 +1509,12 @@ st.markdown(
 
 render_home_logo_control()
 render_gemini_usage_control()
-render_theme_control()
-render_agent_menu()
+render_home_shortcut()
+render_v2_sidebar()
+
+if st.session_state.page == "history":
+    render_history_page()
+    st.stop()
 
 if st.session_state.page == "usage":
     render_usage_page()
@@ -1394,29 +1534,20 @@ if st.session_state.page == "architecture":
 
 if st.session_state.page == "home":
     st.markdown(
-        """
+        f"""
         <section class="maf-hero">
-      <svg class="maf-network" viewBox="0 0 850 650" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <path d="M220 -40 C300 112, 380 220, 530 315 S700 422, 875 600"/>
-        <path d="M370 -30 C400 135, 455 215, 530 315 S655 470, 705 685"/>
-        <path d="M860 72 C685 142, 625 235, 530 315 S307 455, 220 665"/>
-        <path d="M880 230 C704 238, 622 280, 530 315 S330 340, 145 350"/>
-        <path class="network-fine" d="M570 -20 C545 130, 550 205, 530 315 S438 490, 350 670"/>
-        <path class="network-fine" d="M875 480 C692 410, 612 357, 530 315 S320 165, 254 -10"/>
-        <circle cx="530" cy="315" r="7"/><circle cx="625" cy="235" r="3"/><circle cx="438" cy="490" r="3"/>
-      </svg>
       <div class="maf-hero-copy">
-        <div class="maf-kicker">One prompt · many specialists · one result</div>
         <h1><span class="maf-hero-primary">ONE TASK.</span><br><span class="maf-hero-accent">MANY MINDS.</span></h1>
-        <p>Tell us what you need. We will make a response for you.</p>
+        <p>Turn one request into a structured, reviewable result. Taskloom reveals how language analysis, planning, specialist work, and quality review fit together—before you approve the output.</p>
       </div>
+      {star_svg()}
     </section>
         """,
         unsafe_allow_html=True,
     )
-    _, start_col, _ = st.columns([4, 4, 4])
+    start_col, _ = st.columns([1, 2])
     with start_col:
-        if st.button("Start chat  →", type="primary", use_container_width=True):
+        if st.button("Explore the studio  →", type="primary", use_container_width=True):
             st.session_state.page = "chat"
             preserve_theme_query()
             st.rerun()
@@ -1504,6 +1635,8 @@ else:
                     st.session_state.revision_mode = False
                     st.session_state.response_source = "local cache" if was_cached else "Gemini API"
                     st.session_state.local_requests_today = local_count
+                    st.session_state.pop("history_id", None)
+                    persist_current_run()
                     run_status.update(label="Preview ready", state="complete", expanded=False)
                 st.session_state.page = "output"
                 st.rerun()
@@ -1512,6 +1645,8 @@ else:
 
 result = st.session_state.get("result")
 if result:
+    if st.session_state.get("history_warning"):
+        st.warning(st.session_state.history_warning)
     roles = list(dict.fromkeys(task.assigned_role for task in result.plan.tasks))
     accepted = bool(st.session_state.get("accepted"))
     st.markdown(
@@ -1567,6 +1702,7 @@ if result:
                 st.session_state.accepted = True
                 st.session_state.final_output = result.final_answer
                 st.session_state.revision_mode = False
+                persist_current_run()
                 st.rerun()
             if revise_col.button("Revise content", key="open_revision", use_container_width=True):
                 st.session_state.revision_mode = True
@@ -1610,6 +1746,7 @@ if result:
                                 st.session_state.response_source = "local cache" if was_cached else "Gemini API"
                                 st.session_state.local_requests_today = local_count
                                 st.session_state.revision_mode = False
+                                persist_current_run()
                             st.rerun()
                         except Exception as exc:
                             show_run_error(exc)
