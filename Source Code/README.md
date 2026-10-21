@@ -6,7 +6,7 @@ Taskloom is a desktop-first, interpretable multi-agent language-processing studi
 
 ## Get started on Windows
 
-Download **`Taskloom Setup.exe`** from the release/download folder and double-click it.
+Download the v2 Windows installer (**`Taskloom.Setup.exe`** on GitHub Releases) and double-click it.
 
 1. Approve the Windows administrator prompt. This allows the default installation folder to be **`C:\Program Files\Taskloom`**.
 2. Keep that location or select **Browse** to install somewhere else.
